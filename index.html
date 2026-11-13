@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de cotización para gestorías</title>
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --bg:#efeae2;--surface:#ffffff;--text:#111b21;--muted:#667781;--line:#e9edef;
+  --bubble-in:#ffffff;--bubble-out:#d9fdd3;--accent:#128c7e;--banner:#0b4f47;--bannerText:#ffffff;
+  --chip:#ffffff;--danger:#d93025;color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b141a;--surface:#111b21;--text:#e9edef;--muted:#8696a0;--line:#222d34;
+    --bubble-in:#202c33;--bubble-out:#005c4b;--accent:#00a884;--banner:#005c4b;--bannerText:#ffffff;
+    --chip:#202c33;--danger:#f28b82;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b141a;--surface:#111b21;--text:#e9edef;--muted:#8696a0;--line:#222d34;
+  --bubble-in:#202c33;--bubble-out:#005c4b;--accent:#00a884;--banner:#005c4b;--bannerText:#ffffff;
+  --chip:#202c33;--danger:#f28b82;color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px}
+.phone{max-width:420px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+@media (min-width:500px){
+  body{display:flex;align-items:center;justify-content:center;background:#d1d7db}
+  .phone{height:800px;max-height:92vh;border-radius:28px;box-shadow:0 10px 30px rgba(0,0,0,.25);border:8px solid #111}
+}
+.banner{background:var(--banner);color:var(--bannerText);padding:12px 16px;font-weight:600;font-size:14px;text-align:center}
+.top{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700}
+.top .name{flex:1;font-weight:600}
+.top .sub{font-size:12px;color:var(--muted);font-weight:400}
+.top button{background:none;border:1px solid var(--accent);color:var(--accent);border-radius:16px;padding:6px 12px;font:inherit;cursor:pointer}
+.chat{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px}
+.msg{max-width:85%;padding:8px 11px;border-radius:10px;line-height:1.45;white-space:pre-line;box-shadow:0 1px 1px rgba(0,0,0,.08)}
+.in{align-self:flex-start;background:var(--bubble-in)}
+.out{align-self:flex-end;background:var(--bubble-out)}
+.typing{color:var(--muted);font-style:italic}
+.options{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;background:var(--surface);border-top:1px solid var(--line);min-height:58px}
+.options:empty{display:none}
+.options button{background:var(--chip);border:1px solid var(--accent);color:var(--accent);border-radius:18px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer}
+.yearbox{display:flex;gap:8px;width:100%;align-items:center}
+.yearbox input{flex:1;min-width:0;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:18px;padding:8px 14px}
+.yearbox input.error{border-color:var(--danger)}
+.yearbox button{background:var(--accent);color:#fff;border:0;border-radius:18px;padding:8px 16px;font:inherit;font-weight:600;cursor:pointer}
+.cta{padding:10px 14px;background:var(--surface);border-top:1px solid var(--line)}
+.cta[hidden]{display:none}
+.cta button{width:100%;background:transparent;color:var(--accent);border:2px solid var(--accent);border-radius:20px;padding:11px 16px;font:inherit;font-weight:600;cursor:pointer}
+.footer{background:var(--surface);border-top:1px solid var(--line);padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.note{font-size:11px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="banner">Así respondería el asistente inteligente de tu gestoría 24/7</div>
+
+  <div class="top">
+    <div class="avatar">G</div>
+    <div class="name">Gestoría del Automotor<div class="sub">en línea · responde al instante</div></div>
+    <button id="reset" type="button">Reiniciar</button>
+  </div>
+
+  <main id="chat" class="chat" aria-live="polite"></main>
+
+  <div id="options" class="options"></div>
+
+  <div class="cta" id="cta" hidden>
+    <button id="foto" type="button">📄 Subir foto de la cédula para revisión previa</button>
+  </div>
+
+  <footer class="footer">
+    <div>¿Querés este cotizador automático de WhatsApp y el seguimiento de trámites en tu gestoría? Hablemos con el equipo de Numia.</div>
+    <div class="note">Simulación de prototipo. Valores de ejemplo, no es una cotización oficial.</div>
+  </footer>
+</div>
+
+<script>
+// TODOS los valores son de EJEMPLO (placeholder). Reemplazar por tablas vigentes verificadas antes de usar con clientes.
+const CONFIG = {
+  aranceles: { auto: 25000, moto: 15000 },           // ARS
+  honorarios: { auto: 80000, moto: 50000 },          // ARS
+  valor_ref_base: { auto: 12000000, moto: 3000000 }, // ARS, valor de referencia para el sellado
+  depreciacion_anual: 0.05,                          // caída de valor por año de antigüedad (ejemplo)
+  impuesto_pct: { cordoba: 0.04, otra: 0.03 }        // porcentaje de impuesto/sellado (ejemplo)
+};
+
+const CURRENT_YEAR = new Date().getFullYear();
+const MIN_YEAR = 1980;
+
+const STEPS = [
+  {
+    key: "tipo",
+    text: "¿Es auto o moto?",
+    options: [
+      { label: "Auto", value: "auto" },
+      { label: "Moto", value: "moto" }
+    ]
+  },
+  {
+    key: "radic",
+    text: "¿Dónde está radicado el vehículo?",
+    options: [
+      { label: "Córdoba Capital", value: "cordoba" },
+      { label: "Otra Provincia", value: "otra" }
+    ]
+  }
+];
+
+const ARS = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+const chat = document.getElementById("chat");
+const opts = document.getElementById("options");
+const cta = document.getElementById("cta");
+let answers = {};
+
+function bubble(text, who) {
+  const d = document.createElement("div");
+  d.className = "msg " + (who === "out" ? "out" : "in");
+  d.textContent = text;
+  chat.appendChild(d);
+  chat.scrollTop = chat.scrollHeight;
+  return d;
+}
+
+// El asistente escribe primero (indicador de "escribiendo…") y después envía el mensaje.
+function botSay(text, cb) {
+  const t = bubble("escribiendo…", "in");
+  t.classList.add("typing");
+  setTimeout(() => {
+    t.remove();
+    bubble(text, "in");
+    if (cb) cb();
+  }, 700);
+}
+
+function showOptions(list, onPick) {
+  opts.innerHTML = "";
+  list.forEach(o => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = o.label;
+    b.onclick = () => onPick(o);
+    opts.appendChild(b);
+  });
+}
+
+function clearOptions() { opts.innerHTML = ""; }
+
+function ask(i, next) {
+  const s = STEPS[i];
+  botSay(s.text, () => {
+    showOptions(s.options, opt => {
+      bubble(opt.label, "out");
+      clearOptions();
+      answers[s.key] = opt.value;
+      answers[s.key + "Label"] = opt.label;
+      setTimeout(next, 300);
+    });
+  });
+}
+
+function askYear(next) {
+  botSay("¿De qué año es? Escribilo, por ejemplo 2018.", () => {
+    opts.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.className = "yearbox";
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.inputMode = "numeric";
+    inp.min = String(MIN_YEAR);
+    inp.max = String(CURRENT_YEAR);
+    inp.placeholder = "Ej: 2018";
+    inp.setAttribute("aria-label", "Año del modelo");
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Enviar";
+
+    const submit = () => {
+      const v = Number(inp.value);
+      if (!Number.isInteger(v) || v < MIN_YEAR || v > CURRENT_YEAR) {
+        inp.classList.add("error");
+        inp.focus();
+        return;
+      }
+      bubble(String(v), "out");
+      clearOptions();
+      answers.anio = v;
+      answers.anioLabel = String(v);
+      setTimeout(next, 300);
+    };
+    btn.onclick = submit;
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+    inp.addEventListener("input", () => inp.classList.remove("error"));
+
+    wrap.append(inp, btn);
+    opts.appendChild(wrap);
+    inp.focus();
+  });
+}
+
+function cotizar(tipo, anio, radic) {
+  const edad = Math.max(0, CURRENT_YEAR - anio);
+  const factor = Math.max(0.3, 1 - CONFIG.depreciacion_anual * edad);
+  const impuesto = CONFIG.valor_ref_base[tipo] * factor * CONFIG.impuesto_pct[radic];
+  const aranceles = CONFIG.aranceles[tipo];
+  const honorarios = CONFIG.honorarios[tipo];
+  return { impuestoYAranceles: impuesto + aranceles, honorarios, total: impuesto + aranceles + honorarios };
+}
+
+function responder() {
+  const tipo = answers.tipo;
+  const radic = answers.radic;
+  const c = cotizar(tipo, answers.anio, radic);
+  const tipoLabel = tipo === "auto" ? "auto" : "moto";
+  const radicLabel = radic === "cordoba" ? "Córdoba Capital" : "Otra Provincia";
+
+  botSay(
+    "¡Listo! Acá va la cotización de tu " + tipoLabel + " (" + answers.anioLabel + ", " + radicLabel + "):\n\n" +
+    "Desglose estimado:\n" +
+    "• Aranceles registrales e impuestos estimados: " + ARS.format(c.impuestoYAranceles) + "\n" +
+    "• Honorarios profesionales del mandatario: " + ARS.format(c.honorarios) + "\n\n" +
+    "Total estimado: " + ARS.format(c.total) + "\n\nSon valores estimados: el monto final te lo confirma el gestor.",
+    () => {
+      botSay(
+        "Estos son los papeles que vas a necesitar:\n" +
+        "☐ Formulario 08 (firmas certificadas)\n" +
+        "☐ Verificación Policial Formulario 12 vigente\n" +
+        "☐ Título y Cédula física/digital\n" +
+        "☐ DNI del comprador y vendedor",
+        () => { cta.hidden = false; }
+      );
+    }
+  );
+}
+
+function startFlow() {
+  ask(0, () => askYear(() => ask(1, responder)));
+}
+
+document.getElementById("foto").addEventListener("click", () => {
+  bubble("📄 Foto de la cédula", "out");
+  cta.hidden = true;
+  setTimeout(() => {
+    botSay("¡Recibido! Le acabo de transferir los datos y la foto a la gestora para que verifique que la documentación esté completa y te confirme el turno.");
+  }, 500);
+});
+
+function reset() {
+  chat.innerHTML = "";
+  clearOptions();
+  cta.hidden = true;
+  answers = {};
+  bubble("Hola! ¿Cuánto me sale transferir un auto en Córdoba y qué papeles necesito?", "out");
+  setTimeout(() => {
+    botSay("¡Hola! Qué bueno que escribiste 😊 Te ayudo al toque.", startFlow);
+  }, 500);
+}
+
+document.getElementById("reset").addEventListener("click", reset);
+reset();
+</script>
+</body>
+</html>
